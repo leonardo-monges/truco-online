@@ -1017,6 +1017,15 @@
           <input type="text" id="room-name" placeholder="ej: La mesa de Juan" maxlength="30">
         </div>
 
+        <div class="form-group">
+          <label>Cantidad de jugadores</label>
+          <select id="room-max-players" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(201,168,76,0.3); border-radius:2px; padding:0.75rem 1rem; color:var(--crema); font-family:'Crimson Text',serif; font-size:1.05rem; outline:none; cursor:pointer;">
+            <option value="2">2 jugadores (1 vs 1)</option>
+            <option value="4" selected>4 jugadores (2 vs 2)</option>
+            <option value="6">6 jugadores (3 vs 3)</option>
+          </select>
+        </div>
+
         <div id="create-error" class="error-msg"></div>
 
         <button class="btn-primary" onclick="handleCreateRoom()">Crear sala</button>
@@ -1069,6 +1078,10 @@
         <div class="spinner"></div>
         <span id="waiting-text">Esperando jugadores...</span>
       </div>
+
+      <button class="btn-primary" id="btn-start" style="display:none; margin-top:1rem; width:100%" onclick="startGame()">
+        ¡Iniciar partida!
+      </button>
 
       <!-- Chat en sala -->
       <div class="chat-section">
@@ -1292,10 +1305,19 @@ function escHtml(str) {
 // ═══════════════════════════════════════════════════════
 async function handleCreateRoom() {
   const name = document.getElementById('room-name').value.trim();
+  const maxPlayers = parseInt(document.getElementById('room-max-players').value);
   if (!name) return showError('create-error', 'Poné un nombre para la sala');
 
   try {
-    const room = await api('POST', '/api/rooms', { name, maxPlayers: 4 });
+    const room = await api('POST', '/api/rooms', { name, maxPlayers });
+    document.getElementById('room-name').value = '';
+    loadRooms();
+    openJoinModal(room.id, room.name, 0, maxPlayers, 'waiting', room.createdBy);
+  } catch(e) {
+    showError('create-error', e.message);
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 // UNIRSE POR CÓDIGO
 // ═══════════════════════════════════════════════════════
@@ -1315,11 +1337,11 @@ async function handleJoinByCode() {
 // ═══════════════════════════════════════════════════════
 // MODAL ELEGIR EQUIPO
 // ═══════════════════════════════════════════════════════
-function openJoinModal(roomId, roomName, players, maxPlayers, status) {
+function openJoinModal(roomId, roomName, players, maxPlayers, status, createdBy) {
   if (status === 'playing') return showToast('Esa partida ya empezó');
   if (status === 'finished') return showToast('Esa partida ya terminó');
 
-  state.joinTargetRoom = { id: roomId, name: roomName };
+  state.joinTargetRoom = { id: roomId, name: roomName, createdBy: createdBy || null };
   state.selectedTeam = null;
 
   document.getElementById('modal-room-preview').innerHTML =
@@ -1369,7 +1391,7 @@ function joinRoom(roomId, roomName, team) {
 
   state.socket.on('room:joined', ({ jugadorIdx, team: myTeam, roomId: rId }) => {
     state.myJugadorIdx = jugadorIdx;
-    state.currentRoom = { id: rId, name: roomName };
+    state.currentRoom = { id: rId, name: roomName, createdBy: state.joinTargetRoom?.createdBy || null };
     setupRoomScreen(rId, roomName);
     showScreen('room');
   });
@@ -1408,6 +1430,18 @@ function setupRoomScreen(roomId, roomName) {
   document.getElementById('room-code-display').textContent = roomId;
   document.getElementById('chat-messages').innerHTML = '';
   addSystemMessage('Entraste a la sala. ¡Esperá que se llene!');
+
+  // Mostrar botón iniciar solo al creador
+  const btnStart = document.getElementById('btn-start');
+  if (state.currentRoom.createdBy === state.user.id) {
+    btnStart.style.display = 'block';
+  } else {
+    btnStart.style.display = 'none';
+  }
+}
+
+function startGame() {
+  if (state.socket) state.socket.emit('room:start');
 }
 
 function updatePlayersGrid(players) {
