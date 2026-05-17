@@ -1295,16 +1295,7 @@ async function handleCreateRoom() {
   if (!name) return showError('create-error', 'Poné un nombre para la sala');
 
   try {
-    const room = await api('POST', '/api/rooms', { name });
-    document.getElementById('room-name').value = '';
-    loadRooms();
-    // Abrir modal para unirse a la sala que creó
-    openJoinModal(room.id, room.name, 0, 6, 'waiting');
-  } catch(e) {
-    showError('create-error', e.message);
-  }
-}
-
+    const room = await api('POST', '/api/rooms', { name, maxPlayers: 4 });
 // ═══════════════════════════════════════════════════════
 // UNIRSE POR CÓDIGO
 // ═══════════════════════════════════════════════════════
